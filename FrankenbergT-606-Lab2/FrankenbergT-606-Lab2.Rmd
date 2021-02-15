@@ -1,0 +1,186 @@
+---
+title: "Wk 2 - Lab 2"
+author: "Tyler Frankenberg"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document:
+    includes:
+      in_header: header.html
+    css: ./lab.css
+    highlight: pygments
+    theme: cerulean
+    toc: true
+    toc_float: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r load-packages, message=FALSE}
+
+library(tidyverse)
+library(openintro)
+
+```
+
+### SFO in February
+
+1.  Create a new data frame that includes flights headed to SFO in February, 
+    and save this data frame as `sfo_feb_flights`. How many flights 
+    meet these criteria?  
+    
+  *There are 68 flights that meet this criteria*
+    
+2.  Describe the distribution of the **arrival** delays of these flights using a 
+    histogram and appropriate summary statistics. **Hint:** The summary 
+    statistics you use should depend on the shape of the distribution.
+  
+  *The mean arrival time of flights to SFO in February was: 4.5 minutes early.  The data is skewed rightward.*
+
+```{r sfo-feb-flights}
+
+##create data frame
+
+sfo_feb_flights <- nycflights %>%
+  filter(dest == "SFO", month == 2)
+
+##histogram of arrival delays
+
+ggplot(data = sfo_feb_flights, aes(x = arr_delay)) +
+  geom_histogram(binwidth = 10)
+
+##summary statistics
+
+sfo_feb_flights %>%
+  summarise(mean_ad   = mean(arr_delay), 
+            median_ad = median(arr_delay),
+            sd_ad     = sd(arr_delay),
+            min_ad    = min(arr_delay),
+            max_ad    = max(arr_delay),
+            n         = n())
+```
+
+### Median & Interquartile Range
+
+3.  Calculate the median and interquartile range for `arr_delay`s of flights in
+    in the `sfo_feb_flights` data frame, grouped by carrier. Which carrier
+    has the most variable arrival delays?
+
+  *With a IQR of 22.00, Delta and United are tied for the most variable arrival  delays on flights to SFO in February*
+
+``` {r median-and-iqr}
+
+sfo_feb_flights %>%
+  group_by(carrier) %>%
+  summarise(median_ad = median(arr_delay), iqr_ad = IQR(arr_delay), n_flights = n())
+
+
+```
+...
+
+## Mean vs. Median
+
+4.  Suppose you really dislike departure delays and you want to schedule 
+    your travel in a month that minimizes your potential departure delay leaving 
+    NYC. One option is to choose the month with the lowest mean departure delay.
+    Another option is to choose the month with the lowest median departure delay. 
+    What are the pros and cons of these two choices?
+
+  *When you choose the month with the lowest median departure delay, you can have  confidence that you are equally as likely to experience either a shorter or longer departure delay than the median.  However,  your median does not reflect the relative influence of outliers in either direction, or tell you anything about how widely  the data varies.*
+  *When you choose the mean, you know equally little about the shape of the data,   and you know nothing about the relative likelihood of experiencing shorter or longer delays than the mean.  Your small  average could be the combined result of a relative few 'way-way-better-than-average' departures, and many, many more  'worse-than-average'delays.'*
+    
+
+```{r mean-vs-median-dep-delay-months}
+
+nycflights %>%
+  group_by(month) %>%
+  summarise(mean_dd = mean(dep_delay),
+            median_dd = median(dep_delay)) %>%
+  arrange(mean_dd)
+
+nycflights %>%
+  group_by(month) %>%
+  summarise(median_dd = median(dep_delay),
+            mean_dd = mean(dep_delay)) %>%
+  arrange(median_dd)
+
+```
+
+## On Time Departure Rate
+
+5.  If you were selecting an airport simply based on on time departure 
+percentage, which NYC airport would you choose to fly out of?
+
+*LGA all the way, baby!*
+    
+```{r ot-dep-rate}
+
+nycflights <- nycflights %>%
+  mutate(dep_type = ifelse(dep_delay < 5, "on time", "delayed"))
+
+nycflights %>%
+  group_by(origin) %>%
+  summarise(ot_dep_rate = sum(dep_type == "on time") / n()) %>%
+  arrange(desc(ot_dep_rate))
+
+```
+
+## More Practice
+
+1.  Mutate the data frame so that it includes a new variable that contains the 
+    average speed, `avg_speed` traveled by the plane for each flight (in mph).
+    **Hint:** Average speed can be calculated as distance divided by
+    number of hours of travel, and note that `air_time` is given in minutes.
+    
+```{r avg_speed}
+
+nycflights <- nycflights %>%
+    mutate(at_in_hours = air_time / 60)
+
+nycflights <- nycflights %>%
+    mutate(avg_speed = distance / at_in_hours)
+
+```
+
+    
+2.  Make a scatterplot of `avg_speed` vs. `distance`. Describe the relationship
+    between average speed and distance.
+    **Hint:** Use `geom_point()`.
+    
+*Average speed rises steeply as distance increases up to a limit of approximately*  *425 mph at 1000 miles traveled, then rises very gradually toward 500 mph as distance traveled approaches 5000. To examine the*   *relationship more clearly at distances < 1000, we'll show the graph again using a logarithmic scale on the x-axis.*
+
+    
+```{r scatter_plot}
+
+ggplot(nycflights, aes(distance, avg_speed)) +
+  geom_point() +
+  geom_smooth(color="#f68060")
+
+ggplot(nycflights, aes(distance, avg_speed)) +
+  geom_point() +
+  geom_smooth(color="#f68060")+
+  scale_x_log10()
+
+```
+
+3.  Replicate the following plot. **Hint:** The data frame plotted only
+    contains flights from American Airlines, Delta Airlines, and United
+    Airlines, and the points are colored by `carrier`. Once you replicate
+    the plot, determine (roughly) what the cutoff point is for departure
+    delays where you can still expect to get to your destination on time.
+    
+*By subsetting the data to examine only cases where arrival and departure time*  *are both less than 50 minutes, and changing the plot to show the regression line for each carrier, we can see there is on average*  *a linear relationship between minutes delayed on departure, and minutes delayed on arrival. It appears from the graph that we can* *depart up to approximately 15 minutes late, and still arrive on average less than 5 minutes late.*
+
+```{r plot-to-replicate, echo=FALSE, fig.show="asis", fig.width=7, fig.height=4}
+
+dl_aa_ua <- nycflights %>%
+  filter(carrier == "AA" | carrier == "DL" | carrier == "UA")
+
+dl_aa_ua <- subset(dl_aa_ua, ((arr_delay <= 50) & (dep_delay <= 50)))
+
+
+ggplot(data = dl_aa_ua, aes(x = dep_delay, y = arr_delay, color = carrier)) +
+  geom_smooth()
+
+
+```
